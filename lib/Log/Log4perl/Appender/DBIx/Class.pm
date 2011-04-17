@@ -1,23 +1,30 @@
 package Log::Log4perl::Appender::DBIx::Class;
+
 use strict;
+use warnings;
 
 use Carp;
 
 our @ISA = qw(Log::Log4perl::Appender);
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 sub new {
     my $class = shift;
 
     my $self = { @_ };
 
-    die 'Must suppy a schema' unless(exists($self->{schema}));
+    die 'Must supply a schema' unless(exists($self->{schema}));
+    unless (ref($self->{schema})) {
+      eval "require $self->{schema}";
+      die "failed to load $self->{schema}: $@" if $@;
+      $self->{schema} = $self->{schema}->connect( $self->{connect_info} );
+    }
 
-    $self->{class} = 'Log' unless(exists($self->{class}));
-    $self->{category_column} = 'category' unless(exists($self->{category_column}));
-    $self->{level_column} = 'level' unless(exists($self->{level_column}));
-    $self->{message_column} = 'message' unless(exists($self->{message_column}));
+    $self->{class}           ||= 'Log';
+    $self->{category_column} ||= 'category';
+    $self->{level_column}    ||= 'level';
+    $self->{message_column}  ||= 'message';
 
     return bless($self, $class);
 }
@@ -55,6 +62,7 @@ sub log {
         }
     }
 
+    # people should probably use DBIx::Class::TimeStamp instead of this
     if($self->{datetime_column}) {
         my $accessor = $self->{datetime_column};
         $row->$accessor($self->{datetime_subref}->());
@@ -89,15 +97,16 @@ This is a specialized Log4perl appender that allows you to log to with
 DBIx::Class.  Each appender can use a different (or the same) class and
 each column is configurable.
 
-B<Note>: I wanted this module to operate on an already connected schema, hence
-it's lack of a config file example.  If you want to use it in such a way,
-patches are welcome!
-
 =head1 PARAMETERS
 
 These can be supplied to Appender's C<new> method.
 
 =over 4
+
+=item B<schema>
+
+The schema object or class to use.  If a class is passed instead of an object,
+connect will be called with the B<connect_info> passes as connection args.
 
 =item B<class>
 
@@ -106,6 +115,10 @@ The resultset class to use for logging.  Defaults to 'Log'.
 =item B<category_column>
 
 The column in which to store the Log4perl category.  Defaults to 'category'.
+
+=item B<connect_info>
+
+Argument passed to connect if an unconnected schema was passed.
 
 =item B<level_column>
 
@@ -126,7 +139,7 @@ column names will be set:
   foreach my $col (@{ $self->{column_names}}) {
       $row->$col($self->{$col});
   }
-  
+
 This allows you to specificy arbitrary options when you create the appender
 and have the logged in any rows created.  An example is in order:
 
@@ -137,7 +150,7 @@ and have the logged in any rows created.  An example is in order:
       user => 'someuser',
       other_columns => [qw(user)]
   );
-  
+
 This will cause any Message objects that are logged to have their C<user>
 column set to 'someuser'.
 
@@ -146,6 +159,10 @@ column set to 'someuser'.
 =head1 AUTHOR
 
 Cory G Watson <gphat@cpan.org>
+
+=head1 CONTRIBUTORS
+
+Arthur Axel "fREW" Schmidt
 
 =head1 SEE ALSO
 
